@@ -4,6 +4,7 @@ import userController from '../controllers/userController.js';
 const router = express.Router();
 
 router.post('/', validateMiddleware.validateUser, userController.createUser);
+router.post('/login', validateMiddleware.validateUserLogin, userController.loginUser);
 router.get('/', userController.getAllUsers);
 router.get('/:id', userController.getUserById);
 router.get('/:id/history', userController.getUserHistory);

@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import pool from '../config/database.js';
+import huggingfaceService from '../service/huggingfaceService.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,13 +26,10 @@ const setupDatabase = async () => {
         for (const statement of statements) {
             if (statement.trim()) {
                 try {
-                    console.log('Executing:', statement.substring(0, 50) + '...');
                     const result = await pool.query(statement);
-                    console.log('✅ Executed successfully');
                 } catch (err) {
-                    console.error('❌ Error executing statement:', err.message);
-                    console.error('Error code:', err.code);
                     if (err.code !== '42P07') {
+                        console.error('Error executing statement:', err.message);
                         throw err;
                     }
                 }
@@ -42,6 +40,8 @@ const setupDatabase = async () => {
 
         await addSampleData();
 
+        console.log('All setup completed successfully!');
+
     } catch (error) {
         console.error('Database setup failed:', error);
     } finally {
@@ -50,53 +50,56 @@ const setupDatabase = async () => {
 }
 
 const addSampleData = async () => {
-    console.log('Adding sample FAQs');
+    console.log('Adding sample FAQs with embeddings...');
 
     const sampleFAQs = [
         {
             question: "What are your business hours?",
             answer: "We are open Monday to Friday from 9 AM to 6 PM, and Saturday from 10 AM to 4 PM. We are closed on Sundays and public holidays.",
-            category: "general",
-            keywords: ["hours", "open", "closed", "schedule", "timing"]
+            category: "general"
         },
         {
             question: "How do I reset my password?",
             answer: "To reset your password, click on the 'Forgot Password' link on the login page, enter your email address, and follow the instructions sent to your email.",
-            category: "account",
-            keywords: ["password", "reset", "forgot", "login", "email"]
+            category: "account"
         },
         {
             question: "What payment methods do you accept?",
             answer: "We accept all major credit cards (Visa, MasterCard, American Express), PayPal, and bank transfers. We also offer payment plans for larger purchases.",
-            category: "payment",
-            keywords: ["payment", "credit card", "paypal", "visa", "mastercard"]
+            category: "payment"
         },
         {
             question: "How can I track my order?",
             answer: "Once your order is shipped, you'll receive a tracking number via email. You can use this number on our website's order tracking page or the courier's website.",
-            category: "shipping",
-            keywords: ["track", "order", "shipping", "delivery", "status"]
+            category: "shipping"
         },
         {
             question: "What is your return policy?",
             answer: "We offer a 30-day return policy for unused items in original packaging. Returns are free for defective items, while customer-initiated returns may incur a restocking fee.",
-            category: "returns",
-            keywords: ["return", "refund", "exchange", "policy", "defective"]
+            category: "returns"
         }
     ];
 
     for (const faq of sampleFAQs) {
         try {
-            await pool.query(
-                'INSERT INTO faqs (question, answer, category, embedding) VALUES ($1, $2, $3, $4)',
-                [faq.question, faq.answer, faq.category, null]
+            const faqText = `${faq.question} ${faq.answer}`;
+            const embedding = await huggingfaceService.requestEmbedding(faqText);
+            
+            const result = await pool.query(
+                'INSERT INTO faqs (question, answer, category, embedding) VALUES ($1, $2, $3, $4) RETURNING id',
+                [faq.question, faq.answer, faq.category, embedding ? JSON.stringify(embedding) : null]
             );
+            
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
         } catch (err) {
-            console.log('FAQ already exists or error inserting:', faq.question.substring(0, 30));
+            if (err.code !== '23505') {
+                console.error(`Error inserting FAQ: ${err.message}`);
+            }
         }
     }
 
-    console.log('Sample data added successfully!');
+    console.log('Sample data with embeddings added successfully!');
 }
 
 const normalizedArgvPath = process.argv[1].replace(/\\/g, '/');

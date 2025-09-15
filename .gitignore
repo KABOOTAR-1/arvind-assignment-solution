@@ -131,7 +131,6 @@ data/
 
 .cache/huggingface/
 
-models/
 *.model
 *.bin
 *.safetensors

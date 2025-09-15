@@ -75,7 +75,7 @@ function calculateConfidence(contextBundle) {
 async function generateContextualAnswer(question, contextBundle) {
   const primaryMatch = contextBundle.semanticMatches[0];
 
-  if (!primaryMatch || primaryMatch.similarity < parseFloat(process.env.CONTEXT_SIMILARITY_THRESHOLD) || 0.5) {
+  if (!primaryMatch || primaryMatch.similarity < (parseFloat(process.env.CONTEXT_SIMILARITY_THRESHOLD) || 0.5)) {
     return {
       answer:
         "I don't have enough information to answer that question accurately. Could you please rephrase or provide more details?",

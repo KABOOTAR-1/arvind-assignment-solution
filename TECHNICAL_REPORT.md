@@ -21,14 +21,17 @@ Totem Interactive is a sophisticated AI-powered FAQ management system that lever
 - Comprehensive error handling and validation
 
 **Database Layer:** PostgreSQL 16  
-- Relational data storage for FAQs, users, and queries
+- Relational data storage for FAQs, users, queries, and sessions
+- Session management with automatic expiration handling
 - Connection pooling for optimal performance
 - Docker containerization for consistent deployment
 
 **AI/ML Integration:** Hugging Face Transformers  
-- Semantic similarity matching using sentence-transformers/all-MiniLM-L6-v2
-- Context-aware answer generation
-- Configurable similarity thresholds
+- 384-dimensional embedding generation using sentence-transformers/all-MiniLM-L6-v2
+- Real-time embedding creation for all FAQ content at creation/update
+- Cosine similarity matching with 0.2 threshold for semantic search
+- JSON string storage format in PostgreSQL TEXT columns
+- Automatic fallback to keyword matching when embeddings fail
 
 **Caching System:** Node-cache  
 - User query caching for performance optimization
@@ -82,19 +85,117 @@ src/
 
 ## Technical Implementation
 
+### Database Schema
+
+The system uses PostgreSQL with the following key tables:
+
+**FAQs Table:**
+```sql
+CREATE TABLE faqs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    category VARCHAR(100),
+    keywords TEXT[],
+    embedding TEXT, -- JSON string of 384-dimensional vector
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Users Table:**
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255),
+    email VARCHAR(255) UNIQUE,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Sessions Table:**
+```sql
+CREATE TABLE user_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_data JSONB DEFAULT '{}',
+    expires_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Queries Table:**
+```sql
+CREATE TABLE queries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question TEXT NOT NULL,
+    answer TEXT,
+    user_id UUID REFERENCES users(id),
+    session_id UUID REFERENCES user_sessions(id),
+    context_faqs JSONB,
+    similarity_scores JSONB,
+    processing_time INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ### Semantic Search Engine
 
-The system implements a sophisticated semantic search mechanism:
+The system implements a sophisticated semantic search mechanism using vector embeddings:
+
+**Key Features**
+
+### Intelligent FAQ Management
+- **CRUD Operations**: Complete lifecycle management for FAQ entries
+- **Automatic Embedding Generation**: Real-time vector creation using HuggingFace transformers
+- **Category-based Organization**: Structured FAQ categorization system
+- **Keyword Support**: Enhanced searchability with custom keywords
+
+### Session Management System
+- **Automatic Session Creation**: Sessions created on user registration and login
+- **24-Hour Expiration**: Default session lifetime with extension capabilities
+- **Session Data Storage**: JSONB storage for flexible session metadata
+- **Cleanup Operations**: Automated expired session removal
+- **User Agent Tracking**: Security-focused session monitoring
+
+### Advanced Query Processing
+- **Semantic Search**: Vector similarity matching with cosine distance calculation
+- **Context Assembly**: Intelligent FAQ selection based on relevance scores
+- **Session Integration**: Query tracking with session context
+- **Fallback Mechanisms**: Keyword matching when embedding generation fails
+- **Performance Tracking**: Query processing time and similarity score logging
+
+### User Authentication System
+- **User Lifecycle**: Complete user registration and management
+- **Login Endpoints**: Session-based authentication flow
+- **Query History**: Comprehensive tracking of user interactions
+- **Analytics Integration**: User behavior and system usage metrics
+
+**Embedding Generation Process:**
+1. FAQ content (question + answer) processed through HuggingFace API
+2. sentence-transformers/all-MiniLM-L6-v2 model generates 384-dimensional vectors
+3. Embeddings stored as JSON strings in PostgreSQL TEXT columns
+4. Automatic embedding generation during FAQ creation and updates
+
+**Semantic Matching Algorithm:**
+1. User query converted to 384-dimensional embedding vector
+2. Cosine similarity calculated against all stored FAQ embeddings
+3. Results filtered by similarity threshold (0.2 minimum)
+4. Top matches ranked by similarity score
+5. Fallback to keyword matching if embedding generation fails
 
 **Context Assembly Process:**
 1. User metadata retrieval and preference analysis
-2. Semantic similarity matching against FAQ database
+2. Semantic similarity matching against FAQ database using embeddings
 3. Recent query history integration for context
-4. Confidence scoring based on multiple factors
+4. Confidence scoring based on similarity scores and multiple factors
 
 **Answer Generation:**
-- Primary match selection based on similarity thresholds
-- Fallback responses for low-confidence queries
+- Primary match selection based on cosine similarity thresholds
+- Fallback responses for low-confidence queries or embedding failures
 - Context-aware personalization capabilities
 
 ### Performance Optimization
@@ -152,7 +253,16 @@ HF_TOKEN=<huggingface_token>
 HF_MODEL=sentence-transformers/all-MiniLM-L6-v2
 CONTEXT_SEMANTIC_MATCHES_LIMIT=5
 CONTEXT_RECENT_QUERIES_LIMIT=5
-CONTEXT_SIMILARITY_THRESHOLD=0.5
+CONTEXT_SIMILARITY_THRESHOLD=0.2
+```
+
+**Embedding System Configuration:**
+```
+# Embedding dimensions: 384 (fixed by model)
+# Storage format: JSON strings in TEXT columns
+# Similarity algorithm: Cosine similarity
+# Minimum similarity threshold: 0.2
+# Fallback: Keyword matching when embeddings fail
 ```
 
 **Performance Tuning:**

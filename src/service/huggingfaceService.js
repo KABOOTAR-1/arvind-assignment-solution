@@ -1,18 +1,34 @@
-import { huggingface } from '../config/index.js';
+import dotenv from 'dotenv';
+dotenv.config();
 import { InferenceClient } from '@huggingface/inference';
 
+const apiKey = process.env.HF_TOKEN;
+const model = process.env.HF_MODEL || 'sentence-transformers/all-MiniLM-L6-v2';
+
 let hf;
-if (huggingface.apiKey) hf = new InferenceClient(huggingface.apiKey);
+if (apiKey) hf = new InferenceClient(apiKey);
 
 async function requestEmbedding(text) {
-  if (!hf) return null;
+  if (!hf) {
+    console.log('HuggingFace client not initialized - API key missing');
+    return null;
+  }
   try {
-    const result = await hf.featureExtraction({ model: huggingface.model, inputs: text });
-    const sentenceEmbedding = result[0].map((_, i) =>
-      result.reduce((sum, token) => sum + token[i], 0) / result.length
-    );
-    return sentenceEmbedding;
-  } catch {
+    const result = await hf.featureExtraction({ model: model, inputs: text });
+    
+    if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'number') {
+      return result;
+    } else {
+      console.error('Unexpected embedding format:', typeof result, Array.isArray(result));
+      return null;
+    }
+  } catch (error) {
+    console.error('HuggingFace API error:', error.message);
+    if (error.message.includes('401')) {
+      console.error('Authentication error - check HF_TOKEN');
+    } else if (error.message.includes('429')) {
+      console.error('Rate limit exceeded - too many requests');
+    }
     return null;
   }
 }

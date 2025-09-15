@@ -4,11 +4,15 @@ A sophisticated Node.js application that provides intelligent FAQ management wit
 
 ## 🚀 Features
 
-- **Intelligent FAQ Management**: Create, read, update, and delete FAQs with semantic search
-- **Contextual Query Processing**: AI-powered query answering using Hugging Face transformers
-- **User Management**: Complete user lifecycle management with query history tracking
+- **Intelligent FAQ Management**: Create, read, update, and delete FAQs with automatic embedding generation
+- **Semantic Search**: AI-powered similarity matching using 384-dimensional embeddings
+- **Session Management**: Automatic session creation with user authentication and expiration handling
+- **User Authentication**: Complete user lifecycle with automatic session generation on registration/login
+- **Contextual Query Processing**: Real-time query answering with HuggingFace transformers
+- **Automatic Embeddings**: Runtime embedding generation and storage for all FAQs
 - **Advanced Analytics**: Query performance metrics and usage analytics
-- **Semantic Similarity**: Context-aware matching using sentence transformers
+- **Cosine Similarity Matching**: Context-aware matching with configurable thresholds
+- **Fallback System**: Keyword matching when embedding generation fails
 - **Caching System**: Optimized performance with intelligent caching
 - **Audit Logging**: Comprehensive logging for context assembly and query processing
 - **RESTful API**: Well-structured REST endpoints with proper validation
@@ -135,9 +139,22 @@ The server will start on `http://localhost:3000`
 | GET | `/api/users` | Get all users | Query: `limit`, `offset` |
 | GET | `/api/users/:id` | Get user by ID | - |
 | GET | `/api/users/:id/history` | Get user's query history | Query: `limit` |
-| POST | `/api/users` | Create new user | `{ name?, email?, metadata? }` |
+| POST | `/api/users` | Create new user (auto-creates session) | `{ name?, email?, metadata? }` |
+| POST | `/api/users/login` | Login user (creates new session) | `{ email?, name? }` |
 | PUT | `/api/users/:id` | Update user | `{ name?, email?, metadata? }` |
 | DELETE | `/api/users/:id` | Delete user | - |
+
+### Session Endpoints
+
+| Method | Endpoint | Description | Body |
+|--------|----------|-------------|------|
+| GET | `/api/sessions/:id` | Get session by ID | - |
+| GET | `/api/sessions/user/:userId` | Get all user sessions | - |
+| POST | `/api/sessions` | Create new session | `{ userId, sessionData?, expiresAt? }` |
+| PUT | `/api/sessions/:id` | Update session data | `{ sessionData }` |
+| PUT | `/api/sessions/:id/extend` | Extend session expiration | `{ additionalMinutes? }` |
+| DELETE | `/api/sessions/:id` | Delete session | - |
+| DELETE | `/api/sessions/cleanup/expired` | Cleanup expired sessions | - |
 
 ### Query Endpoints
 
@@ -160,9 +177,12 @@ The application uses PostgreSQL with the following key configurations:
 
 ### AI/ML Configuration
 
-- **Model**: Uses sentence-transformers/all-MiniLM-L6-v2 for semantic similarity
-- **Similarity Threshold**: Configurable threshold for context matching
+- **Model**: Uses sentence-transformers/all-MiniLM-L6-v2 for 384-dimensional embeddings
+- **Embedding Generation**: Automatic embedding creation for all FAQ content (question + answer)
+- **Storage Format**: JSON strings in PostgreSQL TEXT columns
+- **Similarity Threshold**: Configurable cosine similarity threshold (default: 0.2)
 - **Context Limits**: Configurable limits for semantic matches and recent queries
+- **Fallback Mechanism**: Keyword matching when embedding generation fails
 
 ### Caching Strategy
 
@@ -180,22 +200,40 @@ You can test the APIs using tools like Postman, curl, or PowerShell:
 # Get all FAQs
 Invoke-RestMethod -Uri "http://localhost:3000/api/faqs" -Method GET
 
+# Create a new user (automatically creates session)
+$userBody = @{
+    name = "John Doe"
+    email = "john@example.com"
+} | ConvertTo-Json
+
+$userResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/users" -Method POST -Body $userBody -ContentType "application/json"
+$userId = $userResponse.data.user.id
+$sessionId = $userResponse.data.session.id
+
 # Create a new FAQ
-$body = @{
+$faqBody = @{
     question = "What is AI?"
     answer = "Artificial Intelligence is..."
     category = "Technology"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:3000/api/faqs" -Method POST -Body $body -ContentType "application/json"
+Invoke-RestMethod -Uri "http://localhost:3000/api/faqs" -Method POST -Body $faqBody -ContentType "application/json"
 
-# Process a query
+# Process a query with session (tests semantic search with embeddings)
 $queryBody = @{
-    question = "Tell me about artificial intelligence"
-    userId = "123e4567-e89b-12d3-a456-426614174000"
+    question = "When are you open?"
+    userId = $userId
+    sessionId = $sessionId
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:3000/api/queries" -Method POST -Body $queryBody -ContentType "application/json"
+
+# Login existing user (creates new session)
+$loginBody = @{
+    email = "john@example.com"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/users/login" -Method POST -Body $loginBody -ContentType "application/json"
 ```
 
 ## 🔒 Security Features

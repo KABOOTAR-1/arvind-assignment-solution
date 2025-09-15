@@ -19,6 +19,21 @@ const querySchema = Joi.object({
   sessionId: Joi.string().uuid().optional()
 });
 
+const sessionSchema = Joi.object({
+  userId: Joi.string().uuid().required(),
+  sessionData: Joi.object().optional(),
+  expiresAt: Joi.date().optional()
+});
+
+const sessionUpdateSchema = Joi.object({
+  sessionData: Joi.object().required()
+});
+
+const userLoginSchema = Joi.object({
+  email: Joi.string().email().optional(),
+  name: Joi.string().optional()
+}).or('email', 'name');
+
 const validate = (schema) => {
   return (req, res, next) => {
     const { error } = schema.validate(req.body);
@@ -35,5 +50,8 @@ const validate = (schema) => {
 export default {
   validateFAQ: validate(faqSchema),
   validateUser: validate(userSchema),
-  validateQuery: validate(querySchema)
+  validateQuery: validate(querySchema),
+  validateSession: validate(sessionSchema),
+  validateSessionUpdate: validate(sessionUpdateSchema),
+  validateUserLogin: validate(userLoginSchema)
 };

@@ -2,6 +2,7 @@ import FAQ from '../models/FAQ.js';
 import User from '../models/User.js';
 import Query from '../models/Query.js';
 import Cache from './cacheService.js';
+import huggingfaceService from './huggingfaceService.js';
 
 async function assembleContext(userId, userQuestion, sessionId = null) {
     const startTime = Date.now();
@@ -9,7 +10,7 @@ async function assembleContext(userId, userQuestion, sessionId = null) {
     const userContext = user
         ? { metadata: user.metadata, preferences: user.metadata?.preferences || {}, profile: { name: user.name, email: user.email } }
         : {};
-    const semanticMatches = [];
+    const semanticMatches = await findSimilarFAQs(userQuestion);
     let recentQueries = [];
     if (userId) recentQueries = Cache.getRecentQueries(userId) || (await Query.getRecentQueries(userId, 5));
     const contextBundle = {
@@ -52,8 +53,56 @@ async function generateContextualAnswer(question, contextBundle) {
 
 async function findSimilarFAQs(question, limit = 5) {
     try {
-        const allFAQs = await FAQ.getAllFAQs();
+        const questionEmbedding = await huggingfaceService.requestEmbedding(question);
+        
+        if (!questionEmbedding) {
+            return await findSimilarFAQsKeyword(question, limit);
+        }
 
+        const allFAQs = await FAQ.getAllFAQs();
+        const faqsWithEmbeddings = allFAQs.filter(faq => faq.embedding);
+        
+        if (faqsWithEmbeddings.length === 0) {
+            return await findSimilarFAQsKeyword(question, limit);
+        }
+
+        const matches = [];
+
+        for (const faq of faqsWithEmbeddings) {
+            try {
+                const faqEmbedding = typeof faq.embedding === 'string' 
+                    ? JSON.parse(faq.embedding) 
+                    : faq.embedding;
+                
+                const similarity = cosineSimilarity(questionEmbedding, faqEmbedding);
+                
+                if (similarity > 0.2) {
+                    matches.push({
+                        ...faq,
+                        similarity_score: similarity
+                    });
+                }
+            } catch (embeddingError) {
+                console.error(`Error processing embedding for FAQ ${faq.id}:`, embeddingError.message);
+            }
+        }
+
+        const sortedMatches = matches
+            .sort((a, b) => b.similarity_score - a.similarity_score)
+            .slice(0, limit);
+
+        return sortedMatches;
+
+    } catch (error) {
+        console.error('Error in findSimilarFAQs:', error.message);
+        return await findSimilarFAQsKeyword(question, limit);
+    }
+}
+
+// Fallback keyword matching function
+async function findSimilarFAQsKeyword(question, limit = 5) {
+    try {
+        const allFAQs = await FAQ.getAllFAQs();
         const questionWords = question.toLowerCase().split(/\s+/);
         const matches = [];
 
@@ -80,9 +129,40 @@ async function findSimilarFAQs(question, limit = 5) {
             .slice(0, limit);
 
     } catch (error) {
-        console.error('Error in findSimilarFAQs:', error);
+        console.error('Error in findSimilarFAQsKeyword:', error);
         return [];
     }
+}
+
+// Calculate cosine similarity between two vectors
+function cosineSimilarity(vecA, vecB) {
+    if (!Array.isArray(vecA) || !Array.isArray(vecB)) {
+        console.error('Invalid vectors for similarity calculation');
+        return 0;
+    }
+    
+    if (vecA.length !== vecB.length) {
+        console.error(`Vector dimension mismatch: ${vecA.length} vs ${vecB.length}`);
+        return 0;
+    }
+    
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    
+    if (normA === 0 || normB === 0) {
+        console.error('Zero norm vector detected');
+        return 0;
+    }
+    
+    const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    return Math.max(0, Math.min(1, similarity));
 }
 
 function personalizeAnswer(answer, userMetadata) {
