@@ -167,6 +167,21 @@ The server will start on `http://localhost:3000`
 
 ## 🔧 Configuration
 
+### Recent Updates and Fixes
+
+**Embeddings System Improvements (September 2025)**:
+- Fixed critical HuggingFace API integration issues
+- Corrected embedding vector processing (single 384-dimensional vector handling)
+- Enhanced error handling and logging in semantic services
+- Improved cosine similarity calculation with validation and clamping
+- Lowered similarity threshold from 0.3 to 0.2 for better FAQ matching
+- Updated embedding generation workflow for existing FAQs
+
+**Database Management**:
+- Added comprehensive database cleanup commands
+- Improved setupDatabase.js script with better error handling
+- Enhanced table creation and sample data population
+
 ### Database Configuration
 
 The application uses PostgreSQL with the following key configurations:
@@ -180,7 +195,7 @@ The application uses PostgreSQL with the following key configurations:
 - **Model**: Uses sentence-transformers/all-MiniLM-L6-v2 for 384-dimensional embeddings
 - **Embedding Generation**: Automatic embedding creation for all FAQ content (question + answer)
 - **Storage Format**: JSON strings in PostgreSQL TEXT columns
-- **Similarity Threshold**: Configurable cosine similarity threshold (default: 0.2)
+- **Similarity Threshold**: Configurable cosine similarity threshold (default: 0.2, lowered from 0.3 for better matching)
 - **Context Limits**: Configurable limits for semantic matches and recent queries
 - **Fallback Mechanism**: Keyword matching when embedding generation fails
 
@@ -191,6 +206,36 @@ The application uses PostgreSQL with the following key configurations:
 - **Performance Optimization**: Reduces database load for frequent queries
 
 ## 🧪 Testing
+
+### Automated Test Suite
+
+The project includes a comprehensive Jest test suite covering:
+
+- **Unit Tests**: Individual service and controller testing
+- **Integration Tests**: Database and API endpoint testing
+- **Mock Testing**: HuggingFace API and external service mocking
+- **Coverage Reports**: Detailed code coverage analysis
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+```
+
+**Test Status**: The test suite includes 109 tests across 8 test suites covering:
+- Context Service (19 tests)
+- Semantics Service (multiple integration scenarios)
+- HuggingFace Service (API interaction testing)
+- FAQ Controller (CRUD operations)
+- Query Controller (semantic search and analytics)
+- Model layer testing
+
+**Known Issues**: Some tests may require environment setup and database connectivity. Ensure Docker containers are running before executing tests.
 
 ### Manual API Testing
 
@@ -257,7 +302,28 @@ The application provides comprehensive analytics including:
 
 The application includes Docker support with:
 
-- **PostgreSQL Container**: Fully configured database container
+- **PostgreSQL Container**: Fully configured database container (my-postgres)
 - **Health Checks**: Database availability monitoring
 - **Volume Persistence**: Data persistence across container restarts
 - **Environment Configuration**: Easy environment variable management
+
+### Database Management Commands
+
+```bash
+# Clear all data while preserving schema
+docker-compose exec my-postgres psql -U postgres -d totem_faq -c "TRUNCATE TABLE audit_logs, queries, sessions, users, faqs RESTART IDENTITY CASCADE;"
+
+# Drop and recreate database
+docker-compose exec my-postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS totem_faq; CREATE DATABASE totem_faq;"
+
+# Repopulate with fresh data
+node src/scripts/setupDatabase.js
+```
+
+## 🚀 Development Status
+
+**Current Version**: 1.0.0  
+**Last Updated**: September 2025  
+**Test Coverage**: 109 tests across 8 test suites  
+**Key Features**: Semantic search with embeddings, session management, comprehensive analytics  
+**Recent Fixes**: HuggingFace API integration, embedding processing, similarity calculations
